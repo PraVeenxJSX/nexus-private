@@ -1,0 +1,289 @@
+# NexusAI — Autonomous Enterprise Intelligence Platform
+
+A full-stack portfolio project combining a React/TypeScript workspace, FastAPI, LangChain, LangGraph, retrieval-augmented generation (RAG), Chroma vector search, and scikit-learn analytics.
+
+> This is a strong development/portfolio foundation, not a fully audited enterprise production system. Review security, storage, permissions, backups, rate limits and deployment settings before exposing it publicly.
+
+## Features
+
+- Email/password registration and login using JWT.
+- Private per-user Chroma collections for document retrieval.
+- PDF, DOCX, TXT, Markdown and CSV document ingestion.
+- Recursive chunking and embeddings (OpenAI embeddings if configured; otherwise local Sentence Transformers).
+- LangChain retrieval and grounded LLM responses with source excerpts.
+- LangGraph workflow entry point for the knowledge-research agent.
+- CSV profiling, missing-value summary and Isolation Forest anomaly detection.
+- Audit events for uploads and chat requests.
+- React dashboard, knowledge base, chat workspace, analytics and system health screens.
+- Dockerfiles and Docker Compose.
+
+## Architecture
+
+```text
+React + TypeScript (Vite)
+        | REST + JWT
+        v
+FastAPI / Pydantic
+   |       |        |
+   |       |        +--> scikit-learn / pandas analytics
+   |       +----------> SQLAlchemy (SQLite dev; PostgreSQL URL supported)
+   +------------------> LangGraph workflow
+                           |
+                        LangChain
+                           |
+                  Chroma + embeddings
+                           |
+                   OpenAI Chat Model
+```
+
+## Prerequisites
+
+- Python 3.11 recommended (3.12 may work; native ML dependencies can vary by platform).
+- Node.js 20 or 22 LTS and npm.
+- Git.
+- OpenAI API key for hosted LLM answers. Local Hugging Face embeddings download a model on first run. Chat requires `OPENAI_API_KEY` in this starter.
+- Optional Docker Desktop.
+
+## Quick start — Windows PowerShell
+
+Open PowerShell in the `nexusai` project folder.
+
+### 1. Backend
+
+```powershell
+cd backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Edit `backend/.env`, set a strong `SECRET_KEY` and your `OPENAI_API_KEY`.
+
+```powershell
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+API: http://localhost:8000  
+Swagger: http://localhost:8000/docs  
+Health: http://localhost:8000/api/health
+
+### 2. Frontend (new terminal)
+
+```powershell
+cd frontend
+npm install
+```
+
+Create `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+Run:
+
+```powershell
+npm run dev
+```
+
+Open http://localhost:5173. Register an account, upload a document, then ask a question in AI Workspace.
+
+### Linux / macOS backend commands
+
+```bash
+cd backend
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Frontend commands are the same (`cd frontend && npm install && npm run dev`).
+
+## Docker
+
+1. Create `backend/.env` from `backend/.env.example` and configure secrets/API key.
+2. From the repository root:
+
+```bash
+docker compose up --build
+```
+
+Frontend: http://localhost:5173 (container serves the compiled app)  
+Backend: http://localhost:8000/docs
+
+For a real hosted deployment, change the frontend API URL to your public HTTPS API URL at build time, configure CORS, use managed PostgreSQL/object storage, and put a reverse proxy/TLS in front of the services.
+
+## Deployment — Back4App backend + Vercel frontend
+
+This repository is prepared for a split deployment:
+
+- **Backend:** Back4App Containers using `backend/Dockerfile`
+- **Frontend:** Vercel using `frontend/` as the project root
+
+### 1. Prepare the backend
+
+Create a Back4App Container from the GitHub repository and configure:
+
+- Dockerfile: `backend/Dockerfile`
+- Port: `8000`
+- Environment variables from `backend/.env.example`
+- `ENVIRONMENT=production`
+- A strong random `SECRET_KEY`
+- A managed PostgreSQL `DATABASE_URL`, using the `postgresql+psycopg://...` format
+- Your LLM provider API key
+- `CORS_ORIGINS` set to the final Vercel URL, for example:
+  `https://your-project.vercel.app`
+
+The backend exposes its health check at `/api/health`. After deployment, verify:
+
+```text
+https://your-back4app-api-url.example.com/api/health
+```
+
+### 2. Deploy the frontend to Vercel
+
+Import the repository into Vercel and set:
+
+- Root Directory: `frontend`
+- Framework Preset: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Environment variable:
+  `VITE_API_URL=https://your-back4app-api-url.example.com`
+
+`VITE_API_URL` is a build-time variable. Redeploy the frontend after changing it.
+
+### 3. Complete CORS configuration
+
+After Vercel provides the final production URL, update the Back4App backend's
+`CORS_ORIGINS` environment variable to that exact URL and redeploy the backend.
+For a temporary preview deployment, list multiple comma-separated origins.
+
+### Storage warning
+
+The current application writes SQLite data, uploaded documents, and Chroma data
+to local container paths. These are suitable for a demo but should not be treated
+as durable production storage. Use managed PostgreSQL and durable object/vector
+storage before relying on uploaded documents or user data across container
+rebuilds.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `APP_NAME` | No | API title |
+| `ENVIRONMENT` | No | Environment label |
+| `SECRET_KEY` | Yes for secure deployment | JWT signing secret; replace default |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | JWT expiry |
+| `DATABASE_URL` | No | SQLAlchemy URL; defaults to local SQLite |
+| `OPENAI_API_KEY` | For chat | OpenAI API key; never commit it |
+| `OPENAI_MODEL` | No | Chat model name, default `gpt-4o-mini` |
+| `EMBEDDING_MODEL` | No | Local Sentence Transformers embedding model |
+| `VECTOR_STORE_PATH` | No | Persistent Chroma directory |
+| `UPLOAD_DIR` | No | Uploaded source files |
+| `MAX_UPLOAD_MB` | No | Upload size limit |
+| `CORS_ORIGINS` | No | Comma-separated allowed frontend origins |
+| `VITE_API_URL` | Frontend | API base URL, default `http://localhost:8000` |
+
+### Generate a secure SECRET_KEY
+
+PowerShell:
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+Linux/macOS:
+```bash
+python -c 'import secrets; print(secrets.token_urlsafe(48))'
+```
+
+## API endpoints
+
+All authenticated endpoints require `Authorization: Bearer <access_token>`.
+
+| Method | Endpoint | Auth | Description |
+|---|---|---:|---|
+| GET | `/` | No | Service metadata |
+| GET | `/api/health` | No | Health check |
+| POST | `/api/auth/register` | No | Create account; JSON `{ "email": "you@example.com", "password": "minimum8chars" }` |
+| POST | `/api/auth/login` | No | Login; returns JWT |
+| GET | `/api/auth/me` | Yes | Current user |
+| POST | `/api/documents/upload` | Yes | Multipart field `file`; PDF/DOCX/TXT/MD/CSV |
+| GET | `/api/documents` | Yes | List current user's documents |
+| POST | `/api/chat` | Yes | JSON `{ "question": "What does the policy say?" }` |
+| POST | `/api/analytics/csv` | Yes | Multipart field `file`; CSV profile + anomaly results |
+
+Swagger UI at `/docs` lets you register, authorize, and try the APIs.
+
+## Example API calls
+
+Register:
+```bash
+curl -X POST http://localhost:8000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","password":"ChangeThis123"}'
+```
+Upload (replace TOKEN and path):
+```bash
+curl -X POST http://localhost:8000/api/documents/upload \
+  -H 'Authorization: Bearer TOKEN' \
+  -F 'file=@./company-policy.pdf'
+```
+Ask:
+```bash
+curl -X POST http://localhost:8000/api/chat \
+  -H 'Authorization: Bearer TOKEN' -H 'Content-Type: application/json' \
+  -d '{"question":"Summarize the leave policy and cite the source."}'
+```
+
+## Where to get API keys / services
+
+- OpenAI API key: https://platform.openai.com/api-keys (API billing is separate from a ChatGPT subscription).
+- OpenAI model/pricing information: https://platform.openai.com/docs/models and https://openai.com/api/pricing/.
+- No key required for local Sentence Transformers embeddings; first use downloads model weights from Hugging Face.
+- Optional PostgreSQL: https://www.postgresql.org/download/.
+- Optional Docker Desktop: https://www.docker.com/products/docker-desktop/.
+- No separate LangChain, LangGraph, Chroma or scikit-learn API key is required.
+
+## Important implementation notes / current scope
+
+- Chroma is the active vector store. User-specific collection names are used, and uploaded document metadata includes the owner ID. This starter's Chroma isolation is application-level; production deployments should add stronger tenant isolation, storage encryption and authorization tests.
+- SQL defaults to SQLite for quick local setup. The SQLAlchemy URL can be changed to PostgreSQL after adding a compatible async PostgreSQL driver and configuring a managed database.
+- The LangGraph workflow currently has a single knowledge-research node. Extend it with planner, SQL analyst, report writer, approval and tool-execution nodes as follow-on milestones.
+- CSV analytics uses Isolation Forest and descriptive statistics. Treat anomaly flags as investigation candidates, not proof of fraud or business errors.
+- Chat uses OpenAI Chat Completions via LangChain. The selected model must be available to your API account; model availability and pricing can change.
+- Document uploads are stored locally. Add object storage, virus scanning, retention controls and deletion workflows before production use.
+- Add tests, rate limiting, refresh/revocation tokens, password reset, tenant-level permission tests, and robust audit redaction before public deployment.
+
+## Suggested next engineering milestones
+
+1. Add PostgreSQL + pgvector as an alternative vector backend and Alembic migrations.
+2. Implement BM25 + dense hybrid retrieval and a cross-encoder reranker.
+3. Add evaluation datasets and RAG metrics (Recall@K, MRR, faithfulness, answer relevancy) with Ragas/DeepEval.
+4. Expand LangGraph into planner → retrieval/SQL/tools → verifier → human approval → report nodes.
+5. Add streaming chat, conversation persistence and document version/deletion support.
+6. Add LangSmith/Langfuse tracing, MLflow experiment tracking and Prometheus metrics.
+7. Add RBAC, tenant isolation, prompt-injection defenses, upload scanning and integration tests.
+
+## License
+
+MIT (see LICENSE).
+
+
+## NVIDIA Nemotron configuration
+
+NexusAI defaults to NVIDIA NIM using the OpenAI-compatible endpoint.
+Set `LLM_PROVIDER=nvidia`, `NVIDIA_API_KEY`, `NVIDIA_BASE_URL`, and
+`NVIDIA_MODEL` in `backend/.env`. The default model is
+`nvidia/nemotron-3-ultra-550b-a55b`.
+
+Embeddings are generated locally with Sentence Transformers and do not use
+the NVIDIA chat-completion key. The first embedding-model run downloads model
+weights, so it needs internet access and local disk space.
+
+To use OpenAI instead, set `LLM_PROVIDER=openai` and configure
+`OPENAI_API_KEY` and `OPENAI_MODEL`.

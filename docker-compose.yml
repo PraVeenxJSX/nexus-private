@@ -1,0 +1,20 @@
+services:
+  api:
+    build: ./backend
+    env_file: ./backend/.env
+    ports: ["8000:8000"]
+    volumes: ["nexusai_storage:/app/storage"]
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/storage/nexusai.db
+    restart: unless-stopped
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports: ["5173:80"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  nexusai_storage:
