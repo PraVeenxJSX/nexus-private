@@ -133,12 +133,16 @@ Blueprint. It configures:
 
 - Docker context: `backend`
 - Dockerfile: `backend/Dockerfile`
+- Port: `8000` (Render also injects `PORT`)
 - Health check: `/api/health`
 - A generated `SECRET_KEY`
+- A managed PostgreSQL instance, with `DATABASE_URL` wired automatically
+  (`postgres://...` is converted to `postgresql+psycopg://...` at runtime)
+- Web service plan `1c-2g` (2 GB RAM). Do not use the 512 MB free web plan;
+  Chroma and Sentence Transformers will run the instance out of memory.
 
-In the Render service environment, provide:
+When Render prompts for environment values, provide:
 
-- `DATABASE_URL` from Neon, Render PostgreSQL, or another managed PostgreSQL provider
 - `NVIDIA_API_KEY` or `OPENAI_API_KEY`
 - `CORS_ORIGINS`, initially `http://localhost:5173`
 
@@ -147,6 +151,11 @@ The backend exposes its health check at `/api/health`. After deployment, verify:
 ```text
 https://your-render-api-url.onrender.com/api/health
 ```
+
+If the deploy fails with a database dialect error, confirm `DATABASE_URL` is set
+and that you redeployed after the SQLAlchemy URL conversion in
+`backend/app/core/database.py`. If it fails with Out of Memory, raise the
+instance to at least 2 GB.
 
 ### 2. Deploy the frontend to Vercel
 

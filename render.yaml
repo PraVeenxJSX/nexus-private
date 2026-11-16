@@ -1,8 +1,16 @@
+databases:
+  - name: nexusai-db
+    plan: free
+    databaseName: nexusai
+    user: nexusai
+
 services:
   - type: web
     name: nexusai-api
     runtime: docker
-    plan: free
+    # sentence-transformers + Chroma need more than the 512MB free web plan.
+    # Use 1c-2g (2 GB). A 512MB instance will typically OOM during boot or first chat.
+    plan: 1c-2g
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /api/health
@@ -13,7 +21,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: nexusai-db
+          property: connectionString
       - key: CORS_ORIGINS
         value: http://localhost:5173
       - key: LLM_PROVIDER
