@@ -3,7 +3,7 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import { Activity, Bot, BrainCircuit, FileText, LayoutDashboard, LogOut, MessageSquare, Paperclip, Send, ShieldCheck, Sparkles, UploadCloud, Database, BarChart3, Menu, X, Plus, LoaderCircle } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '' : 'http://localhost:8000');
 const client = axios.create({baseURL:API});
 client.interceptors.request.use(config=>{const token=localStorage.getItem('nexus_token'); if(token) config.headers.Authorization=`Bearer ${token}`; return config;});
 type Message={role:'user'|'assistant';content:string;sources?:any[]};

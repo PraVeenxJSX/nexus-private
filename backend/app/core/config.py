@@ -18,11 +18,12 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     # Embeddings run locally; they do not use the LLM API key.
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"  # FastEmbed ONNX, not PyTorch
     vector_store_path: str = "./storage/chroma"
     upload_dir: str = "./storage/uploads"
     max_upload_mb: int = 20
     cors_origins: str = "http://localhost:5173"
+    static_dir: str = "./static"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

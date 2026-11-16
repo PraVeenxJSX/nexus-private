@@ -10,9 +10,6 @@ from app.core.config import settings
 from app.core.security import current_user, hash_password, verify_password, create_access_token
 from app.models import User, Document, AuditLog
 from app.schemas import RegisterIn, LoginIn, TokenOut, UserOut, ChatIn, ChatOut
-from app.services.rag import ingest_text
-from app.services.agents import run_agent
-from app.services.analytics import analyze_csv
 
 router = APIRouter(prefix="/api")
 @router.post("/auth/register", response_model=TokenOut)
@@ -44,6 +41,7 @@ async def upload_document(file: UploadFile = File(...), user: User = Depends(cur
         elif ext == ".docx": text = "\n".join(p.text for p in DocxDocument(stored).paragraphs)
         else: text = data.decode("utf-8-sig", errors="replace")
         if not text.strip(): raise ValueError("No extractable text found")
+        from app.services.rag import ingest_text
         count = ingest_text(text, file.filename or "uploaded-file", user.id)
         doc = Document(filename=file.filename or "uploaded-file", stored_path=stored, content_type=file.content_type or "application/octet-stream", chunks=count, status="indexed", owner_id=user.id)
     except Exception as exc:
@@ -60,6 +58,7 @@ async def list_documents(user: User = Depends(current_user), db: AsyncSession = 
 @router.post("/chat", response_model=ChatOut)
 async def chat(data: ChatIn, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     try:
+        from app.services.agents import run_agent
         result = run_agent(data.question, user.id)
         db.add(AuditLog(user_id=user.id, action="rag_chat", details=data.question[:500])); await db.commit()
         return {"answer": result["answer"], "sources": result["sources"], "conversation_id": data.conversation_id}
@@ -72,7 +71,9 @@ async def csv_analytics(file: UploadFile = File(...), user: User = Depends(curre
     os.makedirs(settings.upload_dir, exist_ok=True)
     path = str(Path(settings.upload_dir) / f"analytics_{uuid.uuid4().hex}.csv")
     with open(path, "wb") as f: f.write(await file.read())
-    try: return analyze_csv(path)
+    try:
+        from app.services.analytics import analyze_csv
+        return analyze_csv(path)
     except Exception as exc: raise HTTPException(400, f"Could not analyze CSV: {str(exc)[:200]}")
 
 @router.get("/health")

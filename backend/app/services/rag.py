@@ -1,22 +1,28 @@
 from pathlib import Path
-from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_openai import ChatOpenAI
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
 from app.core.config import settings
 
 _embeddings = None
 _vectorstores = {}
 
+
 def embeddings():
     global _embeddings
     if _embeddings is None:
-        # Local Hugging Face embeddings: no paid embedding API required.
-        _embeddings = HuggingFaceEmbeddings(model_name=settings.embedding_model)
+        # ONNX via FastEmbed — avoids PyTorch, which OOMs Render's 512MB instances.
+        from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+
+        cache = Path(settings.vector_store_path) / "_fastembed"
+        cache.mkdir(parents=True, exist_ok=True)
+        _embeddings = FastEmbedEmbeddings(
+            model_name=settings.embedding_model,
+            cache_dir=str(cache),
+        )
     return _embeddings
 
+
 def get_chat_model():
+    from langchain_openai import ChatOpenAI
+
     provider = settings.llm_provider.lower()
     if provider == "nvidia":
         if not settings.nvidia_api_key:
@@ -38,7 +44,10 @@ def get_chat_model():
         )
     raise RuntimeError("Unsupported LLM_PROVIDER. Choose 'nvidia' or 'openai'.")
 
+
 def store_for_user(user_id: int):
+    from langchain_community.vectorstores import Chroma
+
     key = str(user_id)
     if key not in _vectorstores:
         path = Path(settings.vector_store_path) / key
@@ -50,7 +59,10 @@ def store_for_user(user_id: int):
         )
     return _vectorstores[key]
 
+
 def ingest_text(text: str, filename: str, user_id: int):
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000, chunk_overlap=150, add_start_index=True
     )
@@ -61,13 +73,17 @@ def ingest_text(text: str, filename: str, user_id: int):
         store_for_user(user_id).add_documents(docs)
     return len(docs)
 
+
 def retrieve(question: str, user_id: int, k: int = 5):
     try:
         return store_for_user(user_id).similarity_search(question, k=k)
     except Exception:
         return []
 
+
 def answer_question(question: str, user_id: int):
+    from langchain_core.prompts import ChatPromptTemplate
+
     docs = retrieve(question, user_id)
     if not docs:
         return (

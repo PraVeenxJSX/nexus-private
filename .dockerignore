@@ -1,0 +1,13 @@
+.git
+.github
+**/.venv
+**/node_modules
+**/__pycache__
+**/.env
+**/storage
+**/*.db
+**/.pytest_cache
+frontend/dist
+backend/.venv
+README.md
+render.yaml

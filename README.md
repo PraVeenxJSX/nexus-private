@@ -1,3 +1,14 @@
+---
+title: NexusAI
+emoji: 🧠
+colorFrom: slate
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: RAG workspace with FastAPI, Chroma, and React
+---
+
 # NexusAI — Autonomous Enterprise Intelligence Platform
 
 A full-stack portfolio project combining a React/TypeScript workspace, FastAPI, LangChain, LangGraph, retrieval-augmented generation (RAG), Chroma vector search, and scikit-learn analytics.
@@ -9,7 +20,7 @@ A full-stack portfolio project combining a React/TypeScript workspace, FastAPI, 
 - Email/password registration and login using JWT.
 - Private per-user Chroma collections for document retrieval.
 - PDF, DOCX, TXT, Markdown and CSV document ingestion.
-- Recursive chunking and embeddings (OpenAI embeddings if configured; otherwise local Sentence Transformers).
+- Recursive chunking and local FastEmbed (ONNX) embeddings; no PyTorch required.
 - LangChain retrieval and grounded LLM responses with source excerpts.
 - LangGraph workflow entry point for the knowledge-research agent.
 - CSV profiling, missing-value summary and Isolation Forest anomaly detection.
@@ -118,7 +129,60 @@ Backend: http://localhost:8000/docs
 
 For a real hosted deployment, change the frontend API URL to your public HTTPS API URL at build time, configure CORS, use managed PostgreSQL/object storage, and put a reverse proxy/TLS in front of the services.
 
+## Deployment — free (Hugging Face Spaces)
+
+This is the recommended **free** host. Hugging Face CPU Spaces have enough RAM for FastEmbed + Chroma. Render’s 512 MB free web plan will OOM this app.
+
+You get **one public URL** that serves both the React UI and the FastAPI backend (`Dockerfile` at the repo root, port **7860**).
+
+### 1. Optional: free PostgreSQL on Neon
+
+SQLite inside the Space works for a quick demo, but data is lost when the Space restarts. For accounts that survive restarts:
+
+1. Create a project at [neon.tech](https://neon.tech) (free tier).
+2. Copy the connection string (`postgresql://...` or `postgres://...`).
+   The app rewrites it to `postgresql+psycopg://` automatically.
+
+### 2. Create the Space
+
+1. Push this repository to GitHub (including the root `Dockerfile`).
+2. Open [huggingface.co/new-space](https://huggingface.co/new-space).
+3. Name the Space, set **SDK** to **Docker**, hardware **CPU basic** (free), and make it **public** (required for free hardware).
+4. Choose **GitHub** and select `PraVeenxJSX/nexus-private` (or your fork), branch `main`.
+5. Wait for the Docker build. First build is slow (Python + Node).
+
+Direct URL after it starts:
+
+```text
+https://<your-hf-username>-<space-name>.hf.space
+https://<your-hf-username>-<space-name>.hf.space/api/health
+```
+
+### 3. Space secrets (Settings → Variables and secrets)
+
+| Secret | Required | Value |
+|---|---|---|
+| `SECRET_KEY` | Yes | Long random string |
+| `NVIDIA_API_KEY` | For NVIDIA chat | Your NVIDIA NIM key |
+| `OPENAI_API_KEY` | If `LLM_PROVIDER=openai` | Your OpenAI key |
+| `LLM_PROVIDER` | No | `nvidia` (default) or `openai` |
+| `DATABASE_URL` | Recommended | Neon URI; omit to use SQLite |
+| `CORS_ORIGINS` | No | Not needed when UI and API share the Space |
+
+The Space sleeps after idle time on the free CPU. The first request after sleep can take a minute.
+
+### 4. Optional split: Vercel UI + Hugging Face API
+
+If you only want the API on Hugging Face and the UI on Vercel (both free):
+
+- Space still uses the root `Dockerfile`, or `backend/Dockerfile` with `PORT=7860`.
+- Vercel project root: `frontend`
+- `VITE_API_URL=https://<your-hf-username>-<space-name>.hf.space`
+- Space secret `CORS_ORIGINS=https://your-project.vercel.app`
+
 ## Deployment — Render backend + Vercel frontend
+
+Render is **not** a reliable free option for this project (512 MB OOM). Use it only if you pay for at least 2 GB RAM.
 
 This repository is prepared for a split deployment:
 
@@ -138,8 +202,10 @@ Blueprint. It configures:
 - A generated `SECRET_KEY`
 - A managed PostgreSQL instance, with `DATABASE_URL` wired automatically
   (`postgres://...` is converted to `postgresql+psycopg://...` at runtime)
-- Web service plan `1c-2g` (2 GB RAM). Do not use the 512 MB free web plan;
-  Chroma and Sentence Transformers will run the instance out of memory.
+- Web service plan `1c-2g` (2 GB RAM) is recommended. The API can boot on
+  Render's 512 MB free web plan because embeddings use FastEmbed (ONNX), not
+  PyTorch. If logs show `Out of memory (used over 512Mi)` or `No open ports
+  detected`, raise the instance to 2 GB in **Settings → Instance Type**.
 
 When Render prompts for environment values, provide:
 
@@ -293,7 +359,7 @@ Set `LLM_PROVIDER=nvidia`, `NVIDIA_API_KEY`, `NVIDIA_BASE_URL`, and
 `NVIDIA_MODEL` in `backend/.env`. The default model is
 `nvidia/nemotron-3-ultra-550b-a55b`.
 
-Embeddings are generated locally with Sentence Transformers and do not use
+Embeddings are generated locally with FastEmbed (ONNX MiniLM) and do not use
 the NVIDIA chat-completion key. The first embedding-model run downloads model
 weights, so it needs internet access and local disk space.
 

@@ -8,8 +8,8 @@ services:
   - type: web
     name: nexusai-api
     runtime: docker
-    # sentence-transformers + Chroma need more than the 512MB free web plan.
-    # Use 1c-2g (2 GB). A 512MB instance will typically OOM during boot or first chat.
+    # 2 GB recommended. 512MB can boot after FastEmbed (no PyTorch), but chat/upload
+    # may still OOM. Raise Instance Type if logs show "used over 512Mi".
     plan: 1c-2g
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
