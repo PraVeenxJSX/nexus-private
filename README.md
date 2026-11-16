@@ -118,31 +118,34 @@ Backend: http://localhost:8000/docs
 
 For a real hosted deployment, change the frontend API URL to your public HTTPS API URL at build time, configure CORS, use managed PostgreSQL/object storage, and put a reverse proxy/TLS in front of the services.
 
-## Deployment — Back4App backend + Vercel frontend
+## Deployment — Render backend + Vercel frontend
 
 This repository is prepared for a split deployment:
 
-- **Backend:** Back4App Containers using `backend/Dockerfile`
+- **Backend:** Render web service using `backend/Dockerfile`
 - **Frontend:** Vercel using `frontend/` as the project root
 
 ### 1. Prepare the backend
 
-Create a Back4App Container from the GitHub repository and configure:
+This repository includes a [`render.yaml`](./render.yaml) Blueprint. In Render,
+choose **New > Blueprint**, connect the GitHub repository, and apply the
+Blueprint. It configures:
 
+- Docker context: `backend`
 - Dockerfile: `backend/Dockerfile`
-- Port: `8000`
-- Environment variables from `backend/.env.example`
-- `ENVIRONMENT=production`
-- A strong random `SECRET_KEY`
-- A managed PostgreSQL `DATABASE_URL`, using the `postgresql+psycopg://...` format
-- Your LLM provider API key
-- `CORS_ORIGINS` set to the final Vercel URL, for example:
-  `https://your-project.vercel.app`
+- Health check: `/api/health`
+- A generated `SECRET_KEY`
+
+In the Render service environment, provide:
+
+- `DATABASE_URL` from Neon, Render PostgreSQL, or another managed PostgreSQL provider
+- `NVIDIA_API_KEY` or `OPENAI_API_KEY`
+- `CORS_ORIGINS`, initially `http://localhost:5173`
 
 The backend exposes its health check at `/api/health`. After deployment, verify:
 
 ```text
-https://your-back4app-api-url.example.com/api/health
+https://your-render-api-url.onrender.com/api/health
 ```
 
 ### 2. Deploy the frontend to Vercel
@@ -154,13 +157,13 @@ Import the repository into Vercel and set:
 - Build Command: `npm run build`
 - Output Directory: `dist`
 - Environment variable:
-  `VITE_API_URL=https://your-back4app-api-url.example.com`
+  `VITE_API_URL=https://your-render-api-url.onrender.com`
 
 `VITE_API_URL` is a build-time variable. Redeploy the frontend after changing it.
 
 ### 3. Complete CORS configuration
 
-After Vercel provides the final production URL, update the Back4App backend's
+After Vercel provides the final production URL, update the Render backend's
 `CORS_ORIGINS` environment variable to that exact URL and redeploy the backend.
 For a temporary preview deployment, list multiple comma-separated origins.
 
