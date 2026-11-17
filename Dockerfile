@@ -1,4 +1,4 @@
-# Hugging Face Spaces: API + UI on one free CPU instance (port 7860).
+# API + UI on one instance (Hugging Face Spaces port 7860, or Render's injected PORT).
 FROM node:22-alpine AS frontend
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./

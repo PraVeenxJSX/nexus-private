@@ -180,67 +180,63 @@ If you only want the API on Hugging Face and the UI on Vercel (both free):
 - `VITE_API_URL=https://<your-hf-username>-<space-name>.hf.space`
 - Space secret `CORS_ORIGINS=https://your-project.vercel.app`
 
-## Deployment — Render backend + Vercel frontend
+## Deployment — Render Web Service
 
-Render is **not** a reliable free option for this project (512 MB OOM). Use it only if you pay for at least 2 GB RAM.
+Use **New → Web Service**, not Blueprint. There is no `render.yaml`. One Docker service serves the React UI and the FastAPI API from the root `Dockerfile` (same pattern as the Hugging Face Space).
 
-This repository is prepared for a split deployment:
+Render’s 512 MB free instance will run out of memory while loading embeddings. Choose an instance with **at least 2 GB RAM**.
 
-- **Backend:** Render web service using `backend/Dockerfile`
-- **Frontend:** Vercel using `frontend/` as the project root
+### 1. Create the service
 
-### 1. Prepare the backend
+1. Push this repository to GitHub (the root `Dockerfile` must be on the branch you deploy).
+2. In the [Render dashboard](https://dashboard.render.com), choose **New → Web Service**.
+3. Connect the GitHub repository and branch (`main`).
+4. Use these settings:
 
-This repository includes a [`render.yaml`](./render.yaml) Blueprint. In Render,
-choose **New > Blueprint**, connect the GitHub repository, and apply the
-Blueprint. It configures:
+| Setting | Value |
+|---|---|
+| Language / Runtime | Docker |
+| Root Directory | *(leave empty — repo root)* |
+| Dockerfile Path | `Dockerfile` |
+| Instance type | 2 GB RAM or larger |
+| Health Check Path | `/api/health` |
 
-- Docker context: `backend`
-- Dockerfile: `backend/Dockerfile`
-- Port: `8000` (Render also injects `PORT`)
-- Health check: `/api/health`
-- A generated `SECRET_KEY`
-- A managed PostgreSQL instance, with `DATABASE_URL` wired automatically
-  (`postgres://...` is converted to `postgresql+psycopg://...` at runtime)
-- Web service plan `1c-2g` (2 GB RAM) is recommended. The API can boot on
-  Render's 512 MB free web plan because embeddings use FastEmbed (ONNX), not
-  PyTorch. If logs show `Out of memory (used over 512Mi)` or `No open ports
-  detected`, raise the instance to 2 GB in **Settings → Instance Type**.
+Render sets `PORT` automatically. The container listens on that port.
 
-When Render prompts for environment values, provide:
+### 2. Environment variables
 
-- `NVIDIA_API_KEY` or `OPENAI_API_KEY`
-- `CORS_ORIGINS`, initially `http://localhost:5173`
+Add these under **Environment** before the first deploy:
 
-The backend exposes its health check at `/api/health`. After deployment, verify:
+| Key | Value |
+|---|---|
+| `ENVIRONMENT` | `production` |
+| `SECRET_KEY` | Long random string (see below) |
+| `LLM_PROVIDER` | `nvidia` |
+| `NVIDIA_API_KEY` | Your NVIDIA NIM key |
+| `NVIDIA_BASE_URL` | `https://integrate.api.nvidia.com/v1` |
+| `NVIDIA_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b` |
+| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` |
+| `VECTOR_STORE_PATH` | `./storage/chroma` |
+| `UPLOAD_DIR` | `./storage/uploads` |
+| `MAX_UPLOAD_MB` | `20` |
+
+Leave `DATABASE_URL` unset to use SQLite inside the container. For data that survives restarts, create a database separately (Render PostgreSQL or [Neon](https://neon.tech)) and set `DATABASE_URL` to its connection string. `postgres://` URLs are rewritten to `postgresql+psycopg://` at startup.
+
+The UI is built with an empty API URL, so the browser calls `/api` on the same host. `CORS_ORIGINS` is not required for this setup.
+
+To use OpenAI instead, set `LLM_PROVIDER=openai` and `OPENAI_API_KEY`.
+
+### 3. Verify
+
+After the deploy finishes:
 
 ```text
-https://your-render-api-url.onrender.com/api/health
+https://<your-service>.onrender.com
+https://<your-service>.onrender.com/api/health
+https://<your-service>.onrender.com/docs
 ```
 
-If the deploy fails with a database dialect error, confirm `DATABASE_URL` is set
-and that you redeployed after the SQLAlchemy URL conversion in
-`backend/app/core/database.py`. If it fails with Out of Memory, raise the
-instance to at least 2 GB.
-
-### 2. Deploy the frontend to Vercel
-
-Import the repository into Vercel and set:
-
-- Root Directory: `frontend`
-- Framework Preset: Vite
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Environment variable:
-  `VITE_API_URL=https://your-render-api-url.onrender.com`
-
-`VITE_API_URL` is a build-time variable. Redeploy the frontend after changing it.
-
-### 3. Complete CORS configuration
-
-After Vercel provides the final production URL, update the Render backend's
-`CORS_ORIGINS` environment variable to that exact URL and redeploy the backend.
-For a temporary preview deployment, list multiple comma-separated origins.
+If logs show `Out of memory` or `No open ports detected`, raise **Settings → Instance Type** to 2 GB and redeploy. The first request can be slow while FastEmbed downloads the embedding model.
 
 ### Storage warning
 
